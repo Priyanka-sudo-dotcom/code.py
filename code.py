@@ -1,117 +1,87 @@
 import streamlit as st
+import google.generativeai as genai
+import json
 
-# 1. PAGE SETUP
-st.set_page_config(page_title="CookSwipe AI", page_icon="🍳")
+# --- 1. LUXURY INTERFACE ---
+st.set_page_config(page_title="CookSwipe Elite", page_icon="🥘", layout="wide")
 
-# 2. LUXURY DARK THEME CSS
 st.markdown("""
 <style>
-    .stApp { background-color: #000000; color: white; }
-    .recipe-card {
-        background-color: #1a1a1a;
-        padding: 20px;
-        border-radius: 25px;
+    [data-testid="stAppViewContainer"] { background-color: #050505; color: white; }
+    .main-card {
+        background: #111;
         border: 1px solid #333;
-        text-align: center;
-        margin-top: 10px;
+        border-radius: 35px;
+        padding: 35px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.9);
     }
-    .tag {
-        background-color: rgba(255, 165, 0, 0.1);
-        color: #FFA500;
-        padding: 5px 12px;
-        border-radius: 15px;
-        font-size: 13px;
-        display: inline-block;
-        border: 1px solid rgba(255, 165, 0, 0.3);
-        margin: 5px;
+    .tag { background: #FF6B00; color: white; padding: 5px 15px; border-radius: 50px; font-size: 12px; margin-right: 5px; }
+    .stButton>button {
+        background: white !important;
+        color: black !important;
+        font-weight: bold !important;
+        border-radius: 50px !important;
+        height: 55px;
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. THE RECIPE DATABASE (The Brain)
-all_recipes = [
-    {
-        "ingredients": ["rice", "egg"],
-        "name": "Golden Egg Fried Rice",
-        "time": "10m", "cal": "350",
-        "img": "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=500",
-        "instructions": "Scramble eggs, mix with cooked rice and soy sauce."
-    },
-    {
-        "ingredients": ["bread", "egg"],
-        "name": "Cheesy Egg Toast",
-        "time": "8m", "cal": "280",
-        "img": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=500",
-        "instructions": "Toast bread, add fried egg and a slice of cheese."
-    },
-    {
-        "ingredients": ["milk", "banana"],
-        "name": "Velvet Banana Smoothie",
-        "time": "3m", "cal": "200",
-        "img": "https://images.unsplash.com/photo-1553334820-13d8932c45ee?w=500",
-        "instructions": "Blend banana and milk until smooth."
-    },
-    {
-        "ingredients": ["chicken", "rice"],
-        "name": "Seared Chicken & Rice",
-        "time": "20m", "cal": "450",
-        "img": "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=500",
-        "instructions": "Pan-fry chicken and serve over fluffy steamed rice."
-    }
-]
-
-# 4. APP INTERFACE
-st.title("CookSwipe AI 🍳")
-st.write("### 👨‍🍳 What's in your fridge?")
-
-# Ingredient Selection
-user_ingredients = st.multiselect(
-    "Select ingredients you have:",
-    ["rice", "egg", "bread", "milk", "banana", "chicken", "onion"],
-    default=["rice", "egg"]
-)
-
-# 5. FILTERING LOGIC (Find matches)
-found_recipes = []
-for r in all_recipes:
-    # Check if all required ingredients for the recipe are in the user's list
-    if all(item in user_ingredients for item in r['ingredients']):
-        found_recipes.append(r)
-
-# 6. DISPLAY RESULTS AS SWIPE CARDS
-if found_recipes:
-    if 'swipe_idx' not in st.session_state:
-        st.session_state.swipe_idx = 0
+# --- 2. THE AI ENGINE (FREE TIER OPTIMIZED) ---
+def generate_recipe_ai(ingredients):
+    # These models are currently FREE in May 2026
+    free_models = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite']
     
-    # Handle the index in case user changes ingredients
-    current_idx = st.session_state.swipe_idx % len(found_recipes)
-    recipe = found_recipes[current_idx]
+    prompt = f"""
+    Create a unique recipe using: {ingredients}. 
+    Return ONLY a raw JSON object: 
+    {{"name": "...", "time": "...", "calories": "...", "spices": [], "steps": []}}
+    """
+    
+    for m_name in free_models:
+        try:
+            model = genai.GenerativeModel(m_name)
+            response = model.generate_content(prompt)
+            # Clean AI chatter
+            clean_json = response.text.replace('```json', '').replace('```', '').strip()
+            return json.loads(clean_json)
+        except:
+            continue # Try next free model if this one hits a limit
+    return None
 
-    # Show the card
-    st.image(recipe['img'], use_container_width=True)
-    st.markdown(f"""
-    <div class="recipe-card">
-        <div class="tag">⏱ {recipe['time']}</div>
-        <div class="tag">🔥 {recipe['cal']} kcal</div>
-        <h2 style="color:white; margin-bottom:10px;">{recipe['name']}</h2>
-        <p style="color:#bbb; font-style:italic;">{recipe['instructions']}</p>
-    </div>
-    """, unsafe_allow_html=True)
+# --- 3. APP LOGIC ---
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except:
+    st.error("🔑 API Key not found in Streamlit Secrets!")
 
-    # Swipe Buttons
-    st.write("")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("❌ Next", use_container_width=True):
-            st.session_state.swipe_idx += 1
-            st.rerun()
-    with c2:
-        if st.button("🍳 Cook", type="primary", use_container_width=True):
-            st.balloons()
-    with c3:
-        if st.button("❤️ Save", use_container_width=True):
-            st.toast(f"Saved {recipe['name']}!")
-            st.session_state.swipe_idx += 1
-            st.rerun()
-else:
-    st.warning("👨‍🍳 No recipes found for those ingredients. Try adding more items!")
+st.title("CookSwipe Elite 🍳")
+user_input = st.text_input("What's in your fridge?", "Chicken, Avocado, Lime")
+
+if st.button("DESIGN MASTERPIECE"):
+    if user_input:
+        with st.spinner("👨‍🍳 AI Chef is crafting your dish..."):
+            data = generate_recipe_ai(user_input)
+            
+            if data:
+                col1, col2 = st.columns([1, 1.5])
+                with col1:
+                    # High-quality photography link
+                    st.image(f"https://source.unsplash.com/800x1000/?gourmet,{data['name'].replace(' ', ',')}", use_column_width=True)
+                
+                with col2:
+                    st.markdown(f"""
+                    <div class="main-card">
+                        <span class="tag">⏱ {data['time']}</span>
+                        <span class="tag">🔥 {data['calories']} kcal</span>
+                        <h1 style="color:white; margin-top:15px;">{data['name']}</h1>
+                        <hr style="border:0.5px solid #222;">
+                        <h4 style="color:#FF6B00;">Essential Spices</h4>
+                        <p>{", ".join(data['spices'])}</p>
+                        <h4 style="color:#FF6B00;">Steps</h4>
+                        {"".join([f"<p><b>{i+1}.</b> {s}</p>" for i, s in enumerate(data['steps'])])}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.balloons()
+            else:
+                st.error("Free Tier Limit Reached. Please wait 60 seconds and try again!")
